@@ -2,97 +2,164 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Startup Tap Game MVP</title>
-    <!-- Подключаем скрипт Telegram -->
+    <!-- Подключаем Telegram SDK -->
     <script src="https://telegram.org"></script>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            background: #1a1a1a;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #111;
             color: white;
             text-align: center;
             margin: 0;
-            padding: 20px;
+            padding: 0;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 90vh;
+            height: 100vh;
             overflow: hidden;
             user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+        #user-greeting {
+            font-size: 20px;
+            color: #aaa;
+            margin-bottom: 10px;
         }
         #score-container {
-            font-size: 28px;
-            margin-bottom: 20px;
+            font-size: 36px;
+            margin-bottom: 40px;
             font-weight: bold;
+            letter-spacing: 1px;
+        }
+        .coin-wrapper {
+            position: relative;
         }
         #coin {
-            width: 200px;
-            height: 200px;
+            width: 220px;
+            height: 220px;
             background: linear-gradient(145deg, #ffcc00, #ff9900);
             border-radius: 50%;
-            box-shadow: 0 10px 20px rgba(255, 204, 0, 0.4);
+            box-shadow: 0 15px 30px rgba(255, 204, 0, 0.3);
             cursor: pointer;
-            transition: transform 0.1s ease;
+            transition: transform 0.05s ease;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 50px;
+            font-size: 70px;
+            -webkit-tap-highlight-color: transparent;
         }
         #coin:active {
-            transform: scale(0.95);
+            transform: scale(0.92);
+        }
+        /* Анимация вылетающих цифр +1 */
+        .floating-text {
+            position: absolute;
+            color: #ffcc00;
+            font-size: 28px;
+            font-weight: bold;
+            pointer-events: none;
+            animation: floatUp 0.6s ease-out forwards;
+        }
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translate(-50%, -50%) translateY(0) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) translateY(-100px) scale(1.2); }
         }
     </style>
 </head>
 <body>
 
-    <div id="user-greeting">Привет, Энтузиаст!</div>
+    <div id="user-greeting">Загрузка профиля...</div>
     <div id="score-container">Монеты: <span id="score">0</span></div>
-    <div id="coin">🚀</div>
+    
+    <div class="coin-wrapper">
+        <div id="coin">🚀</div>
+    </div>
 
-        <script>
+    <script>
         // Инициализация Telegram Web App
         const tg = window.Telegram.WebApp;
-        tg.expand(); // Расширяем на весь экран
+        
+        // Сигнализируем Telegram, что приложение готово
+        if (typeof tg.ready === 'function') {
+            tg.ready();
+        }
+        if (typeof tg.expand === 'function') {
+            tg.expand();
+        }
 
-        // Безопасное получение счета
+        // Загрузка сохраненного счета
         let score = 0;
         try {
-            const savedScore = localStorage.getItem('tap_score');
-            if (savedScore) score = parseInt(savedScore, 10) || 0;
+            const savedScore = localStorage.getItem('startup_score');
+            if (savedScore) {
+                score = parseInt(savedScore, 10) || 0;
+            }
         } catch (e) {
-            console.log("LocalStorage недоступен");
+            console.error("Ошибка чтения localStorage:", e);
         }
 
         const scoreEl = document.getElementById('score');
         const coinEl = document.getElementById('coin');
         const greetingEl = document.getElementById('user-greeting');
 
-        // Отображаем имя пользователя из Telegram
-        if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
-            greetingEl.innerText = `Привет, ${tg.initDataUnsafe.user.first_name}!`;
-        }
-
+        // Вывод счета на экран
         scoreEl.innerText = score;
 
-        // Универсальная функция для засчета клика
-        function handleTap(event) {
-            event.preventDefault(); // Предотвращаем двойной зум на смартфонах
-            score++;
-            scoreEl.innerText = score;
-            
-            try {
-                localStorage.setItem('tap_score', score);
-            } catch (e) {}
-
-            // Вибрация
-            if (tg.HapticFeedback) {
-                tg.HapticFeedback.impactOccurred('medium');
-            }
+        // Приветствие пользователя
+        if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+            greetingEl.innerText = "Привет, " + tg.initDataUnsafe.user.first_name + "!";
+        } else {
+            greetingEl.innerText = "Привет, Энтузиаст (Браузер)!";
         }
 
-        // Слушаем и клики мышкой, и тапы пальцем
-        coinEl.addEventListener('click', handleTap);
-        coinEl.addEventListener('touchstart', handleTap, { passive: false });
+        // Главная функция клика
+        function doTap(event) {
+            // Защита от стандартного браузерного зума при тапах
+            if (event) event.preventDefault();
+
+            // Увеличиваем счет
+            score++;
+            scoreEl.innerText = score;
+
+            // Сохраняем результат
+            try {
+                localStorage.setItem('startup_score', score);
+            } catch (e) {}
+
+            // Включаем вибрацию в Telegram
+            if (tg && tg.HapticFeedback) {
+                tg.HapticFeedback.impactOccurred('medium');
+            }
+
+            // Создаем красивый эффект циферки "+1" над кнопкой
+            createFloatingText();
+        }
+
+        function createFloatingText() {
+            const text = document.createElement('div');
+            text.className = 'floating-text';
+            text.innerText = '+1';
+            
+            // Помещаем ровно по центру монеты
+            text.style.left = '50%';
+            text.style.top = '50%';
+            
+            coinEl.parentElement.appendChild(text);
+            
+            // Удаляем элемент после завершения анимации
+            setTimeout(() => {
+                text.remove();
+            }, 600);
+        }
+
+        // Подключаем обработчики на любые типы нажатий
+        // touchstart для мгновенного отклика на смартфонах, click для ПК
+        coinEl.addEventListener('touchstart', doTap, { passive: false });
+        coinEl.addEventListener('click', doTap);
     </script>
+</body>
+</html>
