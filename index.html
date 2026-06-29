@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Startup Tap Game MVP</title>
+    <!-- Подключаем официальный скрипт Telegram -->
     <script src="https://telegram.org"></script>
     <style>
         body {
@@ -23,23 +24,45 @@
             -webkit-user-select: none;
             touch-action: manipulation;
         }
-        #user-greeting { font-size: 20px; color: #aaaaaa; margin-bottom: 10px; }
-        #score-container { font-size: 36px; margin-bottom: 40px; font-weight: bold; letter-spacing: 1px; }
-        .coin-wrapper { position: relative; }
+        #user-greeting {
+            font-size: 20px;
+            color: #aaaaaa;
+            margin-bottom: 10px;
+        }
+        #score-container {
+            font-size: 36px;
+            margin-bottom: 40px;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+        .coin-wrapper {
+            position: relative;
+        }
         #coin {
-            width: 220px; height: 220px;
+            width: 220px;
+            height: 220px;
             background: linear-gradient(145deg, #ffcc00, #ff9900);
             border-radius: 50%;
             box-shadow: 0 15px 30px rgba(255, 204, 0, 0.3);
             cursor: pointer;
             transition: transform 0.05s ease;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 70px; -webkit-tap-highlight-color: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 70px;
+            -webkit-tap-highlight-color: transparent;
         }
-        #coin:active { transform: scale(0.92); }
+        #coin:active {
+            transform: scale(0.92);
+        }
+        /* Анимация взлетающей надписи +1 */
         .floating-text {
-            position: absolute; color: #ffcc00; font-size: 28px; font-weight: bold;
-            pointer-events: none; animation: floatUp 0.6s ease-out forwards;
+            position: absolute;
+            color: #ffcc00;
+            font-size: 28px;
+            font-weight: bold;
+            pointer-events: none;
+            animation: floatUp 0.6s ease-out forwards;
         }
         @keyframes floatUp {
             0% { opacity: 1; transform: translate(-50%, -50%) translateY(0) scale(1); }
@@ -58,103 +81,131 @@
 
     <script>
         // === НАСТРОЙКИ БЭКЕНДА SUPABASE ===
-        const SUPABASE_URL = "https://ddpquuynoimucakrjdnx.supabase.co/rest/v1/-FMAHedKzKGOg_tRJ_SYJd";
+        // Вставьте сюда ваши данные из панели управления Supabase
+        const SUPABASE_URL = "https://ddpquuynoimucakrjdnx.supabase.co";
         const SUPABASE_KEY = "sb_publishable_FAovpTZnc-FMAHedKzKGOg_tRJ_SYJd";
 
-        const tg = window.Telegram?.WebApp;
-        if (tg) { tg.ready(); tg.expand(); }
+        // Инициализация Telegram SDK
+        let tg = null;
+        try {
+            if (window.Telegram && window.Telegram.WebApp) {
+                tg = window.Telegram.WebApp;
+                if (typeof tg.ready === 'function') tg.ready();
+                if (typeof tg.expand === 'function') tg.expand();
+            }
+        } catch(e) {
+            console.log("Запуск вне Telegram Mini Apps");
+        }
 
-        let score = 0;
-        let userId = 99999; // ID заглушка для тестов в браузере
+        // Данные пользователя по умолчанию (для тестов в обычном браузере)
+        let userId = 99999;
         let username = "Энтузиаст";
+        let score = 0;
 
+        // Если открыто внутри Telegram, подтягиваем реальные данные игрока
         if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
             userId = tg.initDataUnsafe.user.id;
-            username = tg.initDataUnsafe.user.username || tg.initDataUnsafe.user.first_name;
+            username = tg.initDataUnsafe.user.username || tg.initDataUnsafe.user.first_name || "Игрок";
         }
 
         const scoreEl = document.getElementById('score');
         const coinEl = document.getElementById('coin');
         const greetingEl = document.getElementById('user-greeting');
 
-        // Функция загрузки или создания профиля на сервере
+        // Функция загрузки профиля из базы данных
         async function loadProfile() {
             try {
-                // Пытаемся получить данные пользователя
                 let response = await fetch(`${SUPABASE_URL}/rest/v1/users_scores?telegram_id=eq.${userId}`, {
-                    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+                    headers: { 
+                        "apikey": SUPABASE_KEY, 
+                        "Authorization": `Bearer ${SUPABASE_KEY}` 
+                    }
                 });
                 let data = await response.json();
 
+                // Если пользователь уже есть в БД — берём его счёт
                 if (data && data.length > 0) {
-                    score = data[0].score;
+                    score = data[0].score || 0;
                 } else {
-                    // Если пользователя нет, создаем его в базе данных
-                    await fetch(`${SUPABASE_URL}/rest/v1/users_scores`, {
-                        method: "POST",
-                        headers: { 
-                            "apikey": SUPABASE_KEY, 
-                            "Authorization": `Bearer ${SUPABASE_KEY}`,
-                            "Content-Type": "application/json",
-                            "Prefer": "return=minimal"
-                        },
-                        body: JSON.stringify({ telegram_id: userId, username: username, score: 0 })
-                    });
                     score = 0;
                 }
                 scoreEl.innerText = score;
                 greetingEl.innerText = `Привет, ${username}!`;
             } catch (e) {
-                console.error(e);
-                greetingEl.innerText = "Ошибка подключения к облаку";
+                console.error("Ошибка загрузки профиля:", e);
+                greetingEl.innerText = "Привет, Энтузиаст!";
+                scoreEl.innerText = score;
             }
         }
 
-        // Функция сохранения монет (Debounce-оптимизация стартапа: сохраняем при тапе)
+        // Функция сохранения монет (Метод UPSERT: создаёт строку или обновляет её, если ID уже существует)
         async function saveScoreBackend(currentScore) {
             try {
-                await fetch(`${SUPABASE_URL}/rest/v1/users_scores?telegram_id=eq.${userId}`, {
-                    method: "PATCH",
+                await fetch(`${SUPABASE_URL}/rest/v1/users_scores`, {
+                    method: "POST",
                     headers: { 
                         "apikey": SUPABASE_KEY, 
                         "Authorization": `Bearer ${SUPABASE_KEY}`,
-                        "Content-Type": "application/json"
+                        "Content-Type": "application/json",
+                        "Prefer": "resolution=merge-duplicates" // Магия: обновляет строку при совпадении primary key (telegram_id)
                     },
-                    body: JSON.stringify({ score: currentScore, updated_at: new Date().toISOString() })
+                    body: JSON.stringify({ 
+                        telegram_id: userId, 
+                        username: username, 
+                        score: currentScore,
+                        updated_at: new Date().toISOString() 
+                    })
                 });
             } catch (e) {
-                console.error("Не удалось сохранить на бэкенд", e);
+                console.error("Не удалось сохранить данные в Supabase:", e);
             }
         }
 
-        // Логика тапа
+        // Обработка нажатия на монету
         function doTap(event) {
-            if (event) { event.preventDefault(); event.stopPropagation(); }
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
 
+            // Начисляем монету локально для мгновенного отклика интерфейса
             score++;
             scoreEl.innerText = score;
 
-            if (tg && tg.HapticFeedback) {
-                tg.HapticFeedback.impactOccurred('medium');
-            }
+            // Вибрация в Telegram на смартфонах
+            try {
+                if (tg && tg.HapticFeedback && typeof tg.HapticFeedback.impactOccurred === 'function') {
+                    tg.HapticFeedback.impactOccurred('medium');
+                }
+            } catch(e) {}
 
+            // Создаем визуальный эффект взлетающей надписи +1
             createFloatingText();
-            saveScoreBackend(score); // Мгновенный апдейт в облако
+
+            // Отправляем обновлённый баланс в облако
+            saveScoreBackend(score);
         }
 
         function createFloatingText() {
             const text = document.createElement('div');
             text.className = 'floating-text';
             text.innerText = '+1';
-            text.style.left = '50%'; text.style.top = '50%';
+            
+            text.style.left = '50%';
+            text.style.top = '50%';
+            
             coinEl.parentElement.appendChild(text);
-            setTimeout(() => text.remove(), 600);
+            
+            setTimeout(() => {
+                text.remove();
+            }, 600);
         }
 
+        // Привязываем клики для мышки и тачи для смартфонов
         coinEl.addEventListener('touchstart', doTap, { passive: false });
         coinEl.addEventListener('click', doTap);
 
-        // Запуск синхронизации при старте приложения
+        // Запускаем синхронизацию при загрузке приложения
         loadProfile();
     </script>
 </body>
