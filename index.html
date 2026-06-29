@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Startup Tap Game MVP</title>
-    <!-- Подключаем Telegram SDK -->
+    <!-- Подключаем официальный скрипт Telegram -->
     <script src="https://telegram.org"></script>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #111;
+            background: #111111;
             color: white;
             text-align: center;
             margin: 0;
@@ -26,7 +26,7 @@
         }
         #user-greeting {
             font-size: 20px;
-            color: #aaa;
+            color: #aaaaaa;
             margin-bottom: 10px;
         }
         #score-container {
@@ -55,7 +55,7 @@
         #coin:active {
             transform: scale(0.92);
         }
-        /* Анимация вылетающих цифр +1 */
+        /* Анимация взлетающей надписи +1 */
         .floating-text {
             position: absolute;
             color: #ffcc00;
@@ -80,18 +80,19 @@
     </div>
 
     <script>
-        // Инициализация Telegram Web App
-        const tg = window.Telegram.WebApp;
-        
-        // Сигнализируем Telegram, что приложение готово
-        if (typeof tg.ready === 'function') {
-            tg.ready();
-        }
-        if (typeof tg.expand === 'function') {
-            tg.expand();
+        // Запускаем безопасную инициализацию Telegram SDK
+        let tg = null;
+        try {
+            if (window.Telegram && window.Telegram.WebApp) {
+                tg = window.Telegram.WebApp;
+                if (typeof tg.ready === 'function') tg.ready();
+                if (typeof tg.expand === 'function') tg.expand();
+            }
+        } catch(e) {
+            console.log("Запуск вне Telegram Mini Apps");
         }
 
-        // Загрузка сохраненного счета
+        // Загружаем сохраненные монеты
         let score = 0;
         try {
             const savedScore = localStorage.getItem('startup_score');
@@ -99,43 +100,51 @@
                 score = parseInt(savedScore, 10) || 0;
             }
         } catch (e) {
-            console.error("Ошибка чтения localStorage:", e);
+            console.error("Ошибка localStorage:", e);
         }
 
         const scoreEl = document.getElementById('score');
         const coinEl = document.getElementById('coin');
         const greetingEl = document.getElementById('user-greeting');
 
-        // Вывод счета на экран
+        // Выводим баланс на экран
         scoreEl.innerText = score;
 
-        // Приветствие пользователя
-        if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
-            greetingEl.innerText = "Привет, " + tg.initDataUnsafe.user.first_name + "!";
-        } else {
-            greetingEl.innerText = "Привет, Энтузиаст (Браузер)!";
+        // Определяем имя пользователя (если в Telegram) или пишем заглушку (если в браузере)
+        try {
+            if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.first_name) {
+                greetingEl.innerText = "Привет, " + tg.initDataUnsafe.user.first_name + "!";
+            } else {
+                greetingEl.innerText = "Привет, Энтузиаст!";
+            }
+        } catch (e) {
+            greetingEl.innerText = "Привет, Энтузиаст!";
         }
 
-        // Главная функция клика
+        // Логика нажатия
         function doTap(event) {
-            // Защита от стандартного браузерного зума при тапах
-            if (event) event.preventDefault();
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
 
-            // Увеличиваем счет
+            // Начисляем монету
             score++;
             scoreEl.innerText = score;
 
-            // Сохраняем результат
+            // Локально сохраняем прогресс пользователя
             try {
                 localStorage.setItem('startup_score', score);
             } catch (e) {}
 
-            // Включаем вибрацию в Telegram
-            if (tg && tg.HapticFeedback) {
-                tg.HapticFeedback.impactOccurred('medium');
-            }
+            // Тактильная отдача (вибрация) на телефонах в Telegram
+            try {
+                if (tg && tg.HapticFeedback && typeof tg.HapticFeedback.impactOccurred === 'function') {
+                    tg.HapticFeedback.impactOccurred('medium');
+                }
+            } catch(e) {}
 
-            // Создаем красивый эффект циферки "+1" над кнопкой
+            // Создаем визуальный эффект +1
             createFloatingText();
         }
 
@@ -144,20 +153,17 @@
             text.className = 'floating-text';
             text.innerText = '+1';
             
-            // Помещаем ровно по центру монеты
             text.style.left = '50%';
             text.style.top = '50%';
             
             coinEl.parentElement.appendChild(text);
             
-            // Удаляем элемент после завершения анимации
             setTimeout(() => {
                 text.remove();
             }, 600);
         }
 
-        // Подключаем обработчики на любые типы нажатий
-        // touchstart для мгновенного отклика на смартфонах, click для ПК
+        // Привязываем события для ПК (мышка) и смартфонов (тач)
         coinEl.addEventListener('touchstart', doTap, { passive: false });
         coinEl.addEventListener('click', doTap);
     </script>
