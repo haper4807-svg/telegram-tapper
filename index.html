@@ -3,66 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Startup Tap Game MVP</title>
-    <!-- Подключаем официальный скрипт Telegram -->
+    <title>Startup Tap Game MVP PRO</title>
     <script src="https://telegram.org"></script>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #111111;
-            color: white;
-            text-align: center;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            overflow: hidden;
-            user-select: none;
-            -webkit-user-select: none;
-            touch-action: manipulation;
+            background: #111111; color: white; text-align: center;
+            margin: 0; padding: 0; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; height: 100vh;
+            overflow: hidden; user-select: none; -webkit-user-select: none; touch-action: manipulation;
         }
-        #user-greeting {
-            font-size: 20px;
-            color: #aaaaaa;
-            margin-bottom: 10px;
-        }
-        #score-container {
-            font-size: 36px;
-            margin-bottom: 40px;
-            font-weight: bold;
-            letter-spacing: 1px;
-        }
-        .coin-wrapper {
-            position: relative;
-        }
+        #user-greeting { font-size: 18px; color: #aaaaaa; margin-bottom: 5px; }
+        #score-container { font-size: 42px; margin-bottom: 20px; font-weight: bold; color: #ffcc00; }
+        
+        /* Стили контейнера монеты */
+        .coin-wrapper { position: relative; margin-bottom: 30px; }
         #coin {
-            width: 220px;
-            height: 220px;
+            width: 200px; height: 200px;
             background: linear-gradient(145deg, #ffcc00, #ff9900);
-            border-radius: 50%;
-            box-shadow: 0 15px 30px rgba(255, 204, 0, 0.3);
-            cursor: pointer;
-            transition: transform 0.05s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 70px;
-            -webkit-tap-highlight-color: transparent;
+            border-radius: 50%; box-shadow: 0 15px 30px rgba(255, 204, 0, 0.3);
+            cursor: pointer; transition: transform 0.05s ease;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 70px; -webkit-tap-highlight-color: transparent;
         }
-        #coin:active {
-            transform: scale(0.92);
+        #coin:active { transform: scale(0.92); }
+        #coin.disabled { opacity: 0.6; cursor: not-allowed; pointer-events: none; }
+
+        /* Энергия */
+        #energy-container { font-size: 18px; color: #ffeb3b; font-weight: bold; margin-bottom: 30px; }
+        .progress-bar { width: 200px; height: 12px; background: #333; border-radius: 6px; overflow: hidden; margin-top: 5px; }
+        #progress-fill { width: 100%; height: 100%; background: #ffeb3b; transition: width 0.1s linear; }
+
+        /* Реферальная кнопка */
+        #invite-btn {
+            background: #24292e; color: #ffcc00; border: 2px solid #ffcc00;
+            padding: 12px 24px; font-size: 16px; font-weight: bold;
+            border-radius: 25px; cursor: pointer; transition: all 0.2s ease;
         }
-        /* Анимация взлетающей надписи +1 */
+        #invite-btn:active { transform: scale(0.95); background: #ffcc00; color: #111; }
+
+        /* Анимация +1 */
         .floating-text {
-            position: absolute;
-            color: #ffcc00;
-            font-size: 28px;
-            font-weight: bold;
-            pointer-events: none;
-            animation: floatUp 0.6s ease-out forwards;
+            position: absolute; color: #ffcc00; font-size: 28px; font-weight: bold;
+            pointer-events: none; animation: floatUp 0.6s ease-out forwards;
         }
         @keyframes floatUp {
             0% { opacity: 1; transform: translate(-50%, -50%) translateY(0) scale(1); }
@@ -72,140 +55,176 @@
 </head>
 <body>
 
-    <div id="user-greeting">Синхронизация с сервером...</div>
-    <div id="score-container">Монеты: <span id="score">0</span></div>
+    <div id="user-greeting">Загрузка...</div>
+    <div id="score-container">⚡ <span id="score">0</span></div>
     
     <div class="coin-wrapper">
         <div id="coin">🚀</div>
     </div>
 
+    <div id="energy-container">
+        Энергия: <span id="energy-val">1000</span>/1000
+        <div class="progress-bar"><div id="progress-fill"></div></div>
+    </div>
+
+    <button id="invite-btn">👥 Пригласить друга (+5000)</button>
+
     <script>
         // === НАСТРОЙКИ БЭКЕНДА SUPABASE ===
-        // Вставьте сюда ваши данные из панели управления Supabase
         const SUPABASE_URL = "https://ddpquuynoimucakrjdnx.supabase.co";
         const SUPABASE_KEY = "sb_publishable_FAovpTZnc-FMAHedKzKGOg_tRJ_SYJd";
 
-        // Инициализация Telegram SDK
-        let tg = null;
-        try {
-            if (window.Telegram && window.Telegram.WebApp) {
-                tg = window.Telegram.WebApp;
-                if (typeof tg.ready === 'function') tg.ready();
-                if (typeof tg.expand === 'function') tg.expand();
-            }
-        } catch(e) {
-            console.log("Запуск вне Telegram Mini Apps");
-        }
+        const tg = window.Telegram?.WebApp;
+        if (tg) { tg.ready(); tg.expand(); }
 
-        // Данные пользователя по умолчанию (для тестов в обычном браузере)
+        // Переменные игры
+        let score = 0;
+        let energy = 1000;
+        const maxEnergy = 1000;
+        
         let userId = 99999;
         let username = "Энтузиаст";
-        let score = 0;
+        let referrerId = null; // Кто пригласил текущего юзера
 
-        // Если открыто внутри Telegram, подтягиваем реальные данные игрока
-        if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
-            userId = tg.initDataUnsafe.user.id;
-            username = tg.initDataUnsafe.user.username || tg.initDataUnsafe.user.first_name || "Игрок";
+        // Парсим реферальный ID из ссылки Telegram (start_param)
+        if (tg && tg.initDataUnsafe) {
+            if (tg.initDataUnsafe.user) {
+                userId = tg.initDataUnsafe.user.id;
+                username = tg.initDataUnsafe.user.username || tg.initDataUnsafe.user.first_name || "Игрок";
+            }
+            if (tg.initDataUnsafe.start_param) {
+                referrerId = parseInt(tg.initDataUnsafe.start_param, 10) || null;
+                if (referrerId === userId) referrerId = null; // Сам себя пригласить не может
+            }
         }
 
         const scoreEl = document.getElementById('score');
         const coinEl = document.getElementById('coin');
         const greetingEl = document.getElementById('user-greeting');
+        const energyValEl = document.getElementById('energy-val');
+        const progressFillEl = document.getElementById('progress-fill');
+        const inviteBtn = document.getElementById('invite-btn');
 
-        // Функция загрузки профиля из базы данных
+        // Локальное восстановление энергии (1 ед. в секунду)
+        setInterval(() => {
+            if (energy < maxEnergy) {
+                energy++;
+                updateEnergyUI();
+            }
+        }, 1000);
+
+        function updateEnergyUI() {
+            energyValEl.innerText = energy;
+            progressFillEl.style.width = `${(energy / maxEnergy) * 100}%`;
+            if (energy <= 0) {
+                coinEl.classList.add('disabled');
+            } else {
+                coinEl.classList.remove('disabled');
+            }
+        }
+
+        // Загрузка данных
         async function loadProfile() {
             try {
                 let response = await fetch(`${SUPABASE_URL}/rest/v1/users_scores?telegram_id=eq.${userId}`, {
-                    headers: { 
-                        "apikey": SUPABASE_KEY, 
-                        "Authorization": `Bearer ${SUPABASE_KEY}` 
-                    }
+                    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
                 });
                 let data = await response.json();
 
-                // Если пользователь уже есть в БД — берём его счёт
                 if (data && data.length > 0) {
                     score = data[0].score || 0;
                 } else {
-                    score = 0;
+                    // Новый игрок! Создаем запись
+                    score = referrerId ? 5000 : 0; // Даем 5000 монет, если пришел по рефералке
+                    
+                    await fetch(`${SUPABASE_URL}/rest/v1/users_scores`, {
+                        method: "POST",
+                        headers: { 
+                            "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`,
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({ 
+                            telegram_id: userId, username: username, score: score, referred_by: referrerId 
+                        })
+                    });
+
+                    // Если его кто-то пригласил, даем тому бонусы (напрямую в базе)
+                    if (referrerId) {
+                        await fetch(`${SUPABASE_URL}/rpc/bonus_referrer`, {
+                            method: "POST",
+                            headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+                            body: JSON.stringify({ r_id: referrerId })
+                        }).catch(() => {});
+                    }
                 }
+                
                 scoreEl.innerText = score;
+                updateEnergyUI();
                 greetingEl.innerText = `Привет, ${username}!`;
             } catch (e) {
-                console.error("Ошибка загрузки профиля:", e);
+                console.error(e);
                 greetingEl.innerText = "Привет, Энтузиаст!";
-                scoreEl.innerText = score;
             }
         }
 
-        // Функция сохранения монет (Метод UPSERT: создаёт строку или обновляет её, если ID уже существует)
+        // Сохранение в облако
         async function saveScoreBackend(currentScore) {
             try {
-                await fetch(`${SUPABASE_URL}/rest/v1/users_scores`, {
-                    method: "POST",
+                await fetch(`${SUPABASE_URL}/rest/v1/users_scores?telegram_id=eq.${userId}`, {
+                    method: "PATCH",
                     headers: { 
-                        "apikey": SUPABASE_KEY, 
-                        "Authorization": `Bearer ${SUPABASE_KEY}`,
-                        "Content-Type": "application/json",
-                        "Prefer": "resolution=merge-duplicates" // Магия: обновляет строку при совпадении primary key (telegram_id)
+                        "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`,
+                        "Content-Type": "application/json"
                     },
-                    body: JSON.stringify({ 
-                        telegram_id: userId, 
-                        username: username, 
-                        score: currentScore,
-                        updated_at: new Date().toISOString() 
-                    })
+                    body: JSON.stringify({ score: currentScore, updated_at: new Date().toISOString() })
                 });
-            } catch (e) {
-                console.error("Не удалось сохранить данные в Supabase:", e);
-            }
+            } catch (e) {}
         }
 
-        // Обработка нажатия на монету
+        // Клик
         function doTap(event) {
-            if (event) {
-                event.preventDefault();
-                event.stopPropagation();
-            }
+            if (event) { event.preventDefault(); event.stopPropagation(); }
+            if (energy <= 0) return;
 
-            // Начисляем монету локально для мгновенного отклика интерфейса
+            energy--;
             score++;
             scoreEl.innerText = score;
+            updateEnergyUI();
 
-            // Вибрация в Telegram на смартфонах
-            try {
-                if (tg && tg.HapticFeedback && typeof tg.HapticFeedback.impactOccurred === 'function') {
-                    tg.HapticFeedback.impactOccurred('medium');
-                }
-            } catch(e) {}
+            if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
 
-            // Создаем визуальный эффект взлетающей надписи +1
             createFloatingText();
-
-            // Отправляем обновлённый баланс в облако
             saveScoreBackend(score);
         }
 
         function createFloatingText() {
             const text = document.createElement('div');
-            text.className = 'floating-text';
-            text.innerText = '+1';
-            
-            text.style.left = '50%';
-            text.style.top = '50%';
-            
+            text.className = 'floating-text'; text.innerText = '+1';
+            text.style.left = '50%'; text.style.top = '50%';
             coinEl.parentElement.appendChild(text);
-            
-            setTimeout(() => {
-                text.remove();
-            }, 600);
+            setTimeout(() => text.remove(), 600);
         }
 
-        // Привязываем клики для мышки и тачи для смартфонов
+        // Логика кнопки "Пригласить друга"
+        inviteBtn.addEventListener('click', () => {
+            if (!tg) {
+                alert("Доступно только внутри Telegram!");
+                return;
+            }
+            // Формируем ссылку на вашу аппку. Замените ИМЯ_БОТА и ИМЯ_АППКИ на свои из BotFather!
+            const botUsername = tg.initDataUnsafe?.receiver?.username || "tapchik7819bot"; 
+            const appShortName = "tapobot"; // Название аппки, которое давали в /newapp
+            
+            const shareUrl = `https://t.me{botUsername}/${appShortName}?startapp=${userId}`;
+            const shareText = `🚀 Начни тапать в новой игре вместе со мной! Получи +5000 монет на старт!`;
+            
+            // Открывает окно выбора чата в Telegram для отправки ссылки
+            tg.openTelegramLink(`https://t.me{encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`);
+        });
+
         coinEl.addEventListener('touchstart', doTap, { passive: false });
         coinEl.addEventListener('click', doTap);
 
-        // Запускаем синхронизацию при загрузке приложения
         loadProfile();
     </script>
 </body>
