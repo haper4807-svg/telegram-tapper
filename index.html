@@ -51,12 +51,20 @@
     <div id="score-container">Монеты: <span id="score">0</span></div>
     <div id="coin">🚀</div>
 
-    <script>
+        <script>
         // Инициализация Telegram Web App
         const tg = window.Telegram.WebApp;
         tg.expand(); // Расширяем на весь экран
 
-        let score = parseInt(localStorage.getItem('tap_score')) || 0;
+        // Безопасное получение счета
+        let score = 0;
+        try {
+            const savedScore = localStorage.getItem('tap_score');
+            if (savedScore) score = parseInt(savedScore, 10) || 0;
+        } catch (e) {
+            console.log("LocalStorage недоступен");
+        }
+
         const scoreEl = document.getElementById('score');
         const coinEl = document.getElementById('coin');
         const greetingEl = document.getElementById('user-greeting');
@@ -68,19 +76,23 @@
 
         scoreEl.innerText = score;
 
-        // Логика клика
-        coinEl.addEventListener('click', () => {
+        // Универсальная функция для засчета клика
+        function handleTap(event) {
+            event.preventDefault(); // Предотвращаем двойной зум на смартфонах
             score++;
             scoreEl.innerText = score;
             
-            // Сохраняем пока локально (для MVP фокус-группы этого достаточно)
-            localStorage.setItem('tap_score', score);
+            try {
+                localStorage.setItem('tap_score', score);
+            } catch (e) {}
 
-            // Вибрация (Haptic Feedback) для реализма
+            // Вибрация
             if (tg.HapticFeedback) {
                 tg.HapticFeedback.impactOccurred('medium');
             }
-        });
+        }
+
+        // Слушаем и клики мышкой, и тапы пальцем
+        coinEl.addEventListener('click', handleTap);
+        coinEl.addEventListener('touchstart', handleTap, { passive: false });
     </script>
-</body>
-</html>
